@@ -41,6 +41,8 @@ eval_expression :: proc(node: ast.Expression) -> ^object.Object {
             left := eval(n.Left^)
             right := eval(n.Right^)
             obj^ = eval_infix_expression(n.operator, left, right)
+        case ast.IfExpression:
+            obj^ = eval_if_expression(n)
     }
 
     return obj
@@ -53,6 +55,8 @@ eval_statement :: proc(node: ast.Statement) -> ^object.Object {
             return eval_statements(n.statements[:])
         case ast.ExpressionStatement:
             return eval(n.expression)
+        case ast.BlockStatement:
+            return eval_statements(n.statements[:])
     }
 
     obj := new(object.Object)
@@ -132,4 +136,31 @@ eval_minus_operator_expression :: proc(right: ^object.Object) -> object.Object {
 
 native_bool_to_bool_obj :: proc(b: bool) -> object.Object {
     return object.Boolean{type = .BOOLEAN, value = b}
+}
+
+eval_if_expression :: proc(ie: ast.IfExpression) -> object.Object {
+    condition := eval_expression(ie.condition^)
+
+    if is_truthy(condition^) {
+        return eval_statement(ie.consequence)
+    } else if ie.Alternative != nil {
+        return eval_statement(ie.consequence)
+    } else {
+        return NULL
+    }
+
+    return NULL
+}
+
+is_truthy :: proc (obj: object.Object) -> bool {
+    switch o in obj {
+        case object.Null:
+            return false
+        case object.Integer:
+            return false
+        case object.Boolean:
+            return o.value
+    }
+
+    return false
 }

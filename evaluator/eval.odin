@@ -1,11 +1,9 @@
 package evaluator
 
+import "core:fmt"
+
 import "../ast"
 import "../object"
-
-NULL :: object.Null{}
-TRUE :: object.Boolean{value = true}
-FALSE :: object.Boolean{value = false}
 
 eval :: proc {
     eval_statement,
@@ -17,6 +15,18 @@ eval_statements :: proc(stmts: []ast.Statement) -> ^object.Object {
 
     for s in stmts {
         result = eval(s)
+
+        if result != nil {
+            rt := object.get_type(result^)
+
+            if rt == "return" || rt == "error" {
+                return result
+            }
+        }
+
+        if returnValue, ok := result.(object.ReturnValue); ok {
+            return returnValue.value
+        }
     }
 
     return result
@@ -24,22 +34,24 @@ eval_statements :: proc(stmts: []ast.Statement) -> ^object.Object {
 
 eval_expression :: proc(node: ast.Expression) -> ^object.Object {
     obj := new(object.Object)
-    obj^ = NULL
     #partial switch n in node {
         case ast.IntegerLiteral:
-            obj^ = object.Integer {type = .INTEGER, value = n.value}
+            obj^ = n.value
         case ast.BoolLiteral:
             if n.value {
-                obj^ = TRUE
+                obj^ = true
             } else {
-                obj^ = FALSE
+                obj^ = false
             }
         case ast.PrefixExpression:
             right := eval(n.right^)
+            if is_error(right){ return right}
             obj^ = eval_prefix_expression(n.operator, right)
         case ast.InfixExpression:
             left := eval(n.Left^)
+            if is_error(left){ return left}
             right := eval(n.Right^)
+            if is_error(right){ return right}
             obj^ = eval_infix_expression(n.operator, left, right)
         case ast.IfExpression:
             obj^ = eval_if_expression(n)
@@ -52,51 +64,79 @@ eval_statement :: proc(node: ast.Statement) -> ^object.Object {
 
     #partial switch n in node {
         case ast.Program:
-            return eval_statements(n.statements[:])
+            return eval_program(n)
         case ast.ExpressionStatement:
             return eval(n.expression)
         case ast.BlockStatement:
             return eval_statements(n.statements[:])
+        case ast.ReturnStatement:
+            val := eval(n.expression)
+            if is_error(val){ return val}
+            rv := new(object.Object)
+            rv^ = object.ReturnValue{value = val}
+            return rv
+        case ast.LetStatement:
+            val := eval(n.expression)
+            if is_error(val){return val}
     }
 
     obj := new(object.Object)
-    obj^ = NULL
+
     return obj
 }
 
+eval_program :: proc(program: ast.Program) -> ^object.Object {
+    result: ^object.Object
+
+    for s in program.statements {
+        result = eval(s)
+
+        #partial switch r in result {
+            case object.ReturnValue:
+                return r.value
+            case object.ErrorValue:
+                return result
+        }
+    }
+
+    return result
+}
+
 eval_infix_expression :: proc(operator: string, left: ^object.Object, right: ^object.Object) -> object.Object {
-    right_val, right_ok := right.(object.Integer)
-    left_val, left_ok := left.(object.Integer)
+    right_val, right_ok := right.(int)
+    left_val, left_ok := left.(int)
 
     if left_ok && right_ok {
         return eval_int_infix_expression(operator, left_val, right_val)
+    } else if object.get_type(left^) != object.get_type(right^) {
+        return new_error("type mismatch: %v %v %v",
+            object.get_type(left^), operator, object.get_type(right^))^
     } else {
-        return NULL
+        return new_error("unknown operator: %v %v %v",
+            object.get_type(left^), operator,object.get_type(right^))^
     }
 }
 
-eval_int_infix_expression :: proc(op: string, left: object.Integer, right: object.Integer) -> object.Object {
-    r := right.value
-    l := left.value
+eval_int_infix_expression :: proc(op: string, left: int, right: int) -> object.Object {
     switch op {
         case "+":
-            return object.Integer{value = l + r}
+            return left + right
         case "-":
-            return object.Integer{value = l - r}
+            return left - right
         case "*":
-            return object.Integer{value = l * r}
+            return left * right
         case "/":
-            return object.Integer{value = l / r}
+            return left / right
         case "<":
-            return native_bool_to_bool_obj(l < r)
+            return left < right
         case ">":
-            return native_bool_to_bool_obj(l > r)
+            return left > right
         case "==":
-            return native_bool_to_bool_obj(l == r)
+            return left == right
         case "!=":
-            return native_bool_to_bool_obj(l != r)
+            return left != right
         case:
-            return NULL
+            return new_error("unknown operator: %s %s %s", object.get_type(left), op, object.get_type(right))^
     }
 }
 
@@ -107,60 +147,72 @@ eval_prefix_expression :: proc(operator: string, right: ^object.Object) -> objec
         case "-":
             return eval_minus_operator_expression(right)
         case:
-            return NULL
+            return new_error("unknown operator: %s%s", operator, object.get_type(right^))^
     }
 }
 
 eval_bang_operator_expression :: proc(right: ^object.Object) -> object.Object {
-    switch &r in right {
-        case object.Boolean:
-            r.value = !r.value
-        case object.Integer:
-            return NULL
-        case object.Null:
-            return NULL
+    #partial switch &r in right {
+        case bool:
+            r = !r
+        case int:
+            return new_error("unknown operator: %s%s", "!", object.get_type(right^))^
+        case nil:
+            return new_error("unknown operator: %s%s", "!", object.get_type(right^))^
     }
 
     return right^
 }
 
 eval_minus_operator_expression :: proc(right: ^object.Object) -> object.Object {
-    #partial switch &r in right {
-        case object.Integer:
-            r.value = -r.value
+    switch &r in right {
+        case int:
+            r = -r
             return right^
+        case bool, object.ReturnValue, object.ErrorValue:
+            return new_error("unknown operator: -%s", object.get_type(r))^
         case:
-            return NULL
+            return nil
     }
 }
 
-native_bool_to_bool_obj :: proc(b: bool) -> object.Object {
-    return object.Boolean{type = .BOOLEAN, value = b}
-}
 
 eval_if_expression :: proc(ie: ast.IfExpression) -> object.Object {
     condition := eval_expression(ie.condition^)
+    if is_error(condition) {return condition^}
 
     if is_truthy(condition^) {
-        return eval_statement(ie.consequence)
-    } else if ie.Alternative != nil {
-        return eval_statement(ie.consequence)
+        return eval_statement(ie.consequence^)^
+    } else if ie.alternative != nil {
+        return eval_statement(ie.alternative^)^
     } else {
-        return NULL
+        return nil
     }
 
-    return NULL
+    return nil
 }
 
 is_truthy :: proc (obj: object.Object) -> bool {
-    switch o in obj {
-        case object.Null:
+    #partial switch o in obj {
+        case nil:
             return false
-        case object.Integer:
+        case int:
             return false
-        case object.Boolean:
-            return o.value
+        case bool:
+            return o
     }
 
+    return false
+}
+
+new_error :: proc(format: string, a: ..any) -> ^object.ErrorValue {
+    message := fmt.tprintfln(format, ..a)
+    return new_clone(object.ErrorValue{message = message})
+}  
+
+is_error :: proc(obj: ^object.Object) -> bool {
+    if obj != nil {
+        return object.get_type(obj^) == "error"
+    }
     return false
 }

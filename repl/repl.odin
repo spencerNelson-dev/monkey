@@ -47,12 +47,16 @@ start :: proc(input: os.Handle, out: os.Handle){
 
         evaluated := evaluator.eval_statement(program)
         switch e in evaluated {
-            case object.Boolean:
-                fmt.fprintf(out, "%v\n", e.value)
-            case object.Integer:
-                fmt.fprintf(out, "%v\n", e.value)
-            case object.Null:
+            case bool:
+                fmt.fprintf(out, "%v\n", e)
+            case int:
+                fmt.fprintf(out, "%v\n", e)
+            case nil:
                 fmt.fprintf(out,"null\n")
+            case object.ReturnValue:
+                fmt.fprintf(out, "%v\n", e.value)
+            case object.ErrorValue:
+                fmt.fprintf(out, "%v\n", e.message)
         }
 
         // for tok := lexer.next_token(&l); tok.type != token.TokenType.EOF; tok = lexer.next_token(&l){

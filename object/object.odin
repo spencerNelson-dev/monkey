@@ -2,38 +2,53 @@ package object
 
 import "core:fmt"
 
-ObjectType :: enum {
-    NULL,
-    INTEGER,
-    BOOLEAN,
-}
 
 Object :: union {
-    Null,
-    Integer,
-    Boolean,
+    int,
+    bool,
+    ReturnValue,
+    ErrorValue,
+
 }
 
-Integer :: struct {
-    type: ObjectType,
-    value: int,
+ReturnValue :: struct {
+    value: ^Object
 }
 
-Boolean :: struct {
-    type: ObjectType,
-    value: bool
+ErrorValue :: struct {
+    message: string
 }
 
-Null :: struct {}
 
 inspect :: proc(object: Object) -> string {
-    switch o in object {
-        case Null:
+    #partial switch o in object {
+        case nil:
             return "null"
-        case Integer:
-            return fmt.aprintf("%v", o.value)
-        case Boolean:
-            return fmt.aprint("%v", o.value)
+        case int:
+            return fmt.aprintf("%v", o)
+        case bool:
+            return fmt.aprint("%v", o)
+        case ReturnValue:
+            return inspect(o.value^)
+        case ErrorValue:
+            return fmt.aprintf("ERROR: %v", o.message)
+    }
+
+    return ""
+}
+
+get_type :: proc(object: Object) -> string {
+    switch o in object {
+        case nil:
+            return "nil"
+        case int:
+            return "int"
+        case bool:
+            return "bool"
+        case ReturnValue:
+            return "return"
+        case ErrorValue:
+            return "error"
     }
 
     return ""

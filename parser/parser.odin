@@ -126,9 +126,9 @@ parse_program :: proc(p: ^Parser,) -> ast.Program {
     
     for p.curToken.type != .EOF {
         stmt, ok := parse_statement(p)
-        if ok {
-            append(&program.statements, stmt)
-        }
+    
+        append(&program.statements, stmt)
+
         next_token(p)
     }
 
@@ -198,7 +198,7 @@ parse_return_statement :: proc(p: ^Parser) -> (ast.Statement, bool) {
 parse_expression :: proc(p: ^Parser, precedence: Precedence) -> (ast.Expression, bool) {
     prefix, ok := p.prefixParseFns[p.curToken.type]
     if !ok {
-        return ast.Identifier{}, false
+        return ast.ERROR{message = "invalid operator"}, false
     }
     l_e , _ := prefix(p)
     left_exp := new(ast.Expression)

@@ -7,6 +7,7 @@ import "../token"
 
 Program :: struct {
     statements: [dynamic]Statement,
+    errors: [dynamic]string,
 }
 
 Statement :: union {
@@ -48,6 +49,7 @@ Expression :: union {
     IfExpression,
     FunctionLiteral,
     CallExpression,
+    ERROR,
 }
 
 Identifier :: struct {
@@ -95,6 +97,10 @@ CallExpression :: struct {
     token: token.Token,
     function: ^Expression,
     arguments: [dynamic]^Expression
+}
+
+ERROR :: struct {
+    message: string
 }
 
 print_program :: proc (p: ^Program){
@@ -164,6 +170,8 @@ print_expression :: proc(expression: Expression) -> string {
             return fmt.tprintf("%v (params) %v", e.token.literal, print_statement(e.body^))
         case CallExpression:
             return fmt.tprintf("Call Expression")
+        case ERROR:
+            return fmt.tprintf("ERROR: %v", e.message)
     }
     return ""
 }

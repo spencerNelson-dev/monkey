@@ -29,7 +29,7 @@ start :: proc(input: os.Handle, out: os.Handle){
 
     bufio.scanner_init(&scanner, reader)
 
-    // fmt.fprintf(out, PROMPT)
+    env := object.Environment{}
 
     for {
         fmt.fprintf(out, PROMPT)
@@ -45,14 +45,14 @@ start :: proc(input: os.Handle, out: os.Handle){
 
         program := parser.parse_program(&p)
 
-        evaluated := evaluator.eval_statement(program)
+        evaluated := evaluator.eval_statement(program, &env)
         switch e in evaluated {
             case bool:
                 fmt.fprintf(out, "%v\n", e)
             case int:
                 fmt.fprintf(out, "%v\n", e)
             case nil:
-                fmt.fprintf(out,"null\n")
+                //fmt.fprintf(out,"null\n")
             case object.ReturnValue:
                 fmt.fprintf(out, "%v\n", e.value)
             case object.ErrorValue:

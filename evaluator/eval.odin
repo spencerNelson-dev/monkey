@@ -10,11 +10,11 @@ eval :: proc {
     eval_expression,
 }
 
-eval_statements :: proc(stmts: []ast.Statement) -> ^object.Object {
+eval_statements :: proc(stmts: []ast.Statement, env: ^object.Environment) -> ^object.Object {
     result: ^object.Object
 
     for s in stmts {
-        result = eval(s)
+        result = eval(s, env)
 
         if result != nil {
             rt := object.get_type(result^)
@@ -32,7 +32,7 @@ eval_statements :: proc(stmts: []ast.Statement) -> ^object.Object {
     return result
 }
 
-eval_expression :: proc(node: ast.Expression) -> ^object.Object {
+eval_expression :: proc(node: ast.Expression, env: ^object.Environment) -> ^object.Object {
     obj := new(object.Object)
     #partial switch n in node {
         case ast.IntegerLiteral:
@@ -44,40 +44,45 @@ eval_expression :: proc(node: ast.Expression) -> ^object.Object {
                 obj^ = false
             }
         case ast.PrefixExpression:
-            right := eval(n.right^)
+            right := eval(n.right^, env)
             if is_error(right){ return right}
             obj^ = eval_prefix_expression(n.operator, right)
         case ast.InfixExpression:
-            left := eval(n.Left^)
+            left := eval(n.Left^, env)
             if is_error(left){ return left}
-            right := eval(n.Right^)
+            right := eval(n.Right^, env)
             if is_error(right){ return right}
             obj^ = eval_infix_expression(n.operator, left, right)
         case ast.IfExpression:
-            obj^ = eval_if_expression(n)
+            obj^ = eval_if_expression(n, env)
+        case ast.ERROR:
+            obj^ = object.ErrorValue{message = n.message}
+        case ast.Identifier:
+            obj^ = eval_identifier(n, env)
     }
 
     return obj
 }
 
-eval_statement :: proc(node: ast.Statement) -> ^object.Object {
+eval_statement :: proc(node: ast.Statement, env: ^object.Environment) -> ^object.Object {
 
     #partial switch n in node {
         case ast.Program:
-            return eval_program(n)
+            return eval_program(n, env)
         case ast.ExpressionStatement:
-            return eval(n.expression)
+            return eval(n.expression, env)
         case ast.BlockStatement:
-            return eval_statements(n.statements[:])
+            return eval_statements(n.statements[:], env)
         case ast.ReturnStatement:
-            val := eval(n.expression)
+            val := eval(n.expression, env)
             if is_error(val){ return val}
             rv := new(object.Object)
             rv^ = object.ReturnValue{value = val}
             return rv
         case ast.LetStatement:
-            val := eval(n.expression)
+            val := eval(n.expression, env)
             if is_error(val){return val}
+            env.store[n.name.value] = val^
     }
 
     obj := new(object.Object)
@@ -85,11 +90,11 @@ eval_statement :: proc(node: ast.Statement) -> ^object.Object {
     return obj
 }
 
-eval_program :: proc(program: ast.Program) -> ^object.Object {
+eval_program :: proc(program: ast.Program, env: ^object.Environment) -> ^object.Object {
     result: ^object.Object
 
     for s in program.statements {
-        result = eval(s)
+        result = eval(s, env)
 
         #partial switch r in result {
             case object.ReturnValue:
@@ -177,19 +182,28 @@ eval_minus_operator_expression :: proc(right: ^object.Object) -> object.Object {
 }
 
 
-eval_if_expression :: proc(ie: ast.IfExpression) -> object.Object {
-    condition := eval_expression(ie.condition^)
+eval_if_expression :: proc(ie: ast.IfExpression, env: ^object.Environment) -> object.Object {
+    condition := eval_expression(ie.condition^, env)
     if is_error(condition) {return condition^}
 
     if is_truthy(condition^) {
-        return eval_statement(ie.consequence^)^
+        return eval_statement(ie.consequence^, env)^
     } else if ie.alternative != nil {
-        return eval_statement(ie.alternative^)^
+        return eval_statement(ie.alternative^, env)^
     } else {
         return nil
     }
 
     return nil
+}
+
+eval_identifier :: proc (ident: ast.Identifier, env: ^object.Environment) -> object.Object {
+    val, ok := env.store[ident.value]
+    if !ok {
+        return new_error("identifier not found: %v", ident.value)^
+    }
+
+    return val
 }
 
 is_truthy :: proc (obj: object.Object) -> bool {

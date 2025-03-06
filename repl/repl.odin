@@ -30,6 +30,7 @@ start :: proc(input: os.Handle, out: os.Handle){
     bufio.scanner_init(&scanner, reader)
 
     env := new(object.Environment)
+    defer delete(env.store)
 
     for {
         fmt.fprintf(out, PROMPT)
@@ -40,7 +41,12 @@ start :: proc(input: os.Handle, out: os.Handle){
         }
 
         line := scanner.buf
-        l := lexer.New(strings.clone_from_bytes(line[start:]))
+        text := strings.clone_from_bytes(line[start:])
+        defer delete(text)
+        if text[:5] == ":exit" {
+            break
+        }
+        l := lexer.New(text)
         p := parser.parser_init(&l)
 
         program := parser.parse_program(&p)
@@ -70,7 +76,7 @@ start :: proc(input: os.Handle, out: os.Handle){
                 
                 
         }
-
+        
         // for tok := lexer.next_token(&l); tok.type != token.TokenType.EOF; tok = lexer.next_token(&l){
         //     fmt.fprintf(out, "%+v\n", tok)
         // }

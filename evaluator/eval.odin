@@ -1,6 +1,7 @@
 package evaluator
 
 import "core:fmt"
+import "core:strings"
 
 import "../ast"
 import "../object"
@@ -81,7 +82,6 @@ eval_expression :: proc(node: ast.Expression, env: ^object.Environment) -> ^obje
 }
 
 eval_statement :: proc(node: ast.Statement, env: ^object.Environment) -> ^object.Object {
-
     #partial switch n in node {
         case ast.Program:
             return eval_program(n, env)
@@ -96,12 +96,15 @@ eval_statement :: proc(node: ast.Statement, env: ^object.Environment) -> ^object
             rv^ = object.ReturnValue{value = val}
             return rv
         case ast.LetStatement:
+
             val := eval(n.expression, env)
             if is_error(val){return val}
             // ls := new(object.Object)
             // ls^ = val^
             // env.store[n.name.value] = ls^
-            env.store[n.name.value] = val^
+            name := strings.clone(n.name.value)
+            env.store[name] = val^
+            fmt.printf("%v", env.store)
     }
 
     obj := new(object.Object)

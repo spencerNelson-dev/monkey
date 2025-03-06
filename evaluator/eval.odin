@@ -59,6 +59,22 @@ eval_expression :: proc(node: ast.Expression, env: ^object.Environment) -> ^obje
             obj^ = object.ErrorValue{message = n.message}
         case ast.Identifier:
             obj^ = eval_identifier(n, env)
+        case ast.FunctionLiteral:
+            params := n.parameters
+            body := n.body
+            obj^ = object.Function{parameters = params, environment = env, body = body}
+        case ast.CallExpression:
+            function := eval(n.function^, env)
+            if is_error(function) {
+                return function
+            }
+            args := eval_expressions(n.arguments[:], env)
+            if len(args) == 1 && is_error(&args[0]) {
+                return &args[0]
+            }
+
+            obj^ = apply_function(function^, args)
+            
     }
 
     return obj
@@ -82,6 +98,9 @@ eval_statement :: proc(node: ast.Statement, env: ^object.Environment) -> ^object
         case ast.LetStatement:
             val := eval(n.expression, env)
             if is_error(val){return val}
+            // ls := new(object.Object)
+            // ls^ = val^
+            // env.store[n.name.value] = ls^
             env.store[n.name.value] = val^
     }
 
@@ -105,6 +124,21 @@ eval_program :: proc(program: ast.Program, env: ^object.Environment) -> ^object.
     }
 
     return result
+}
+
+eval_expressions :: proc(exps: []^ast.Expression, env: ^object.Environment) -> []object.Object {
+    result: [dynamic]object.Object
+
+    for e in exps {
+        evaluated := eval_expression(e^, env)
+        append(&result, evaluated^)
+
+        if is_error(evaluated) {
+            return result[:]
+        }
+    }
+
+    return result[:]
 }
 
 eval_infix_expression :: proc(operator: string, left: ^object.Object, right: ^object.Object) -> object.Object {
@@ -174,7 +208,7 @@ eval_minus_operator_expression :: proc(right: ^object.Object) -> object.Object {
         case int:
             r = -r
             return right^
-        case bool, object.ReturnValue, object.ErrorValue:
+        case bool, object.ReturnValue, object.ErrorValue, object.Function:
             return new_error("unknown operator: -%s", object.get_type(r))^
         case:
             return nil
@@ -198,12 +232,41 @@ eval_if_expression :: proc(ie: ast.IfExpression, env: ^object.Environment) -> ob
 }
 
 eval_identifier :: proc (ident: ast.Identifier, env: ^object.Environment) -> object.Object {
-    val, ok := env.store[ident.value]
+    val, ok := object.get_from_env(env, ident.value)
     if !ok {
         return new_error("identifier not found: %v", ident.value)^
     }
 
     return val
+}
+
+apply_function :: proc(fn: object.Object, args: []object.Object) -> object.Object {
+    function, ok := fn.(object.Function)
+    if !ok {
+        return new_error("not a function: %v", typeid_of(type_of(fn)))^
+    }
+
+    extended_env := extend_function_env(function, args)
+    evaluated := eval(function.body^, extended_env)
+    return unwrap_return_value(evaluated^)
+}
+
+extend_function_env :: proc(fn: object.Function, args: []object.Object) -> ^object.Environment {
+    env := object.new_enclosed_envrionment(fn.environment)
+
+    for param, paramIdx in fn.parameters {
+        env.store[param.value] = args[paramIdx]
+    }
+
+    return env
+}
+
+unwrap_return_value :: proc(obj: object.Object) -> object.Object {
+    if returnValue, ok := obj.(object.ReturnValue); ok {
+        return returnValue.value^
+    }
+
+    return obj
 }
 
 is_truthy :: proc (obj: object.Object) -> bool {

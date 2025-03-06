@@ -29,7 +29,7 @@ start :: proc(input: os.Handle, out: os.Handle){
 
     bufio.scanner_init(&scanner, reader)
 
-    env := object.Environment{}
+    env := new(object.Environment)
 
     for {
         fmt.fprintf(out, PROMPT)
@@ -45,7 +45,7 @@ start :: proc(input: os.Handle, out: os.Handle){
 
         program := parser.parse_program(&p)
 
-        evaluated := evaluator.eval_statement(program, &env)
+        evaluated := evaluator.eval_statement(program, env)
         switch e in evaluated {
             case bool:
                 fmt.fprintf(out, "%v\n", e)
@@ -57,6 +57,18 @@ start :: proc(input: os.Handle, out: os.Handle){
                 fmt.fprintf(out, "%v\n", e.value)
             case object.ErrorValue:
                 fmt.fprintf(out, "%v\n", e.message)
+            case object.Function:
+                fmt.fprint(out, "fn(")
+                for p in e.parameters {
+                    fmt.fprintf(out, "%v,", p.value)
+                }
+                fmt.fprint(out, ") {\n")
+                for e in e.body.statements {
+                    fmt.fprintf(out, "\t%v\n", ast.print_statement(e))
+                }
+                fmt.fprint(out, "}\n")
+                
+                
         }
 
         // for tok := lexer.next_token(&l); tok.type != token.TokenType.EOF; tok = lexer.next_token(&l){

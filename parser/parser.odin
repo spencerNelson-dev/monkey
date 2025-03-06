@@ -423,7 +423,9 @@ parse_function_parameters :: proc(p: ^Parser, params: ^[dynamic]^ast.Identifier)
 }
 
 parse_call_expression :: proc(p: ^Parser, function: ^ast.Expression) -> (ast.Expression, bool) {
-    exp := ast.CallExpression {token = p.curToken, function = function}
+    func := new(ast.Expression)
+    func^ = function^
+    exp := ast.CallExpression {token = p.curToken, function = func}
     ok := parse_call_arguments(p, &exp.arguments)
     if !ok {
         return nil, false

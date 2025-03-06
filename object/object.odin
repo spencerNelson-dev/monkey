@@ -2,13 +2,15 @@ package object
 
 import "core:fmt"
 
+import "../ast"
+
 
 Object :: union {
     int,
     bool,
     ReturnValue,
     ErrorValue,
-
+    Function,
 }
 
 ReturnValue :: struct {
@@ -17,6 +19,12 @@ ReturnValue :: struct {
 
 ErrorValue :: struct {
     message: string
+}
+
+Function :: struct {
+    parameters: [dynamic]^ast.Identifier,
+    body: ^ast.BlockStatement,
+    environment: ^Environment,
 }
 
 
@@ -32,6 +40,8 @@ inspect :: proc(object: Object) -> string {
             return inspect(o.value^)
         case ErrorValue:
             return fmt.aprintf("ERROR: %v", o.message)
+        case Function:
+            return fmt.aprintf("fn(){}")
     }
 
     return ""
@@ -49,6 +59,8 @@ get_type :: proc(object: Object) -> string {
             return "return"
         case ErrorValue:
             return "error"
+        case Function:
+            return "functon"
     }
 
     return ""

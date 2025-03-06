@@ -169,7 +169,7 @@ print_expression :: proc(expression: Expression) -> string {
         case FunctionLiteral:
             return fmt.tprintf("%v (params) %v", e.token.literal, print_statement(e.body^))
         case CallExpression:
-            return fmt.tprintf("Call Expression")
+            return fmt.tprintf("%v(%v)", e.function.(Identifier).value, e.arguments)
         case ERROR:
             return fmt.tprintf("ERROR: %v", e.message)
     }

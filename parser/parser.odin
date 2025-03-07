@@ -4,6 +4,7 @@ package parser
 
 import "core:fmt"
 import "core:strconv"
+import "core:strings"
 
 import "../ast"
 import "../lexer"
@@ -61,6 +62,7 @@ parser_init :: proc(l: ^lexer.Lexer) -> Parser {
     register_prefix(&p, .LPAREN, parse_grouped_expression)
     register_prefix(&p, .IF, parse_if_expression)
     register_prefix(&p, .FUNCTION, parse_function_literal)
+    register_prefix(&p, .STRING, parse_string_literal)
 
     register_infix(&p, .PLUS, parse_infix_expression)
     register_infix(&p, .MINUS, parse_infix_expression)
@@ -198,7 +200,8 @@ parse_return_statement :: proc(p: ^Parser) -> (ast.Statement, bool) {
 parse_expression :: proc(p: ^Parser, precedence: Precedence) -> (ast.Expression, bool) {
     prefix, ok := p.prefixParseFns[p.curToken.type]
     if !ok {
-        return ast.ERROR{message = "invalid operator"}, false
+        msg := strings.clone("invalid operator")
+        return ast.ERROR{message = &msg}, false
     }
     l_e , _ := prefix(p)
     left_exp := new(ast.Expression)
@@ -267,10 +270,18 @@ parse_integer_literal :: proc(p: ^Parser) -> (ast.Expression, bool) {
     return lit, ok
 }
 
+parse_string_literal :: proc(p: ^Parser) -> (ast.Expression, bool) {
+    lit := ast.StringLiteral{
+        token = p.curToken,
+        value = p.curToken.literal
+    }
+    return lit, true
+}
+
 parse_prefix_expression :: proc(p: ^Parser) -> (ast.Expression, bool) {
     expression := ast.PrefixExpression {
         token = p.curToken,
-        operator = p.curToken.literal,
+        operator = p.curToken.literal
     }
 
     next_token(p)
@@ -292,7 +303,7 @@ parse_infix_expression :: proc(p: ^Parser, left: ^ast.Expression) -> (ast.Expres
     expression := ast.InfixExpression {
         token = p.curToken,
         operator = p.curToken.literal,
-        Left = new_left
+        Left = new_left,
     }
 
     precedence := cur_precedence(p)

@@ -1,3 +1,5 @@
+#+feature dynamic-literals
+
 package evaluator
 
 import "core:fmt"
@@ -5,6 +7,23 @@ import "core:strings"
 
 import "../ast"
 import "../object"
+
+builtins := map[string]object.Builtin{
+    "len" = object.Builtin {
+        fn = proc(args: ..object.Object) -> object.Object {
+            if len(args) != 1 {
+                return new_error("wrong number of arguments. got=%v, want=1", len(args))^
+            }
+
+            #partial switch a in args[0] {
+                case object.StringValue:
+                    return len(a.value)
+                case:
+                    return new_error("argument to len() not supported, got %v", object.get_type(a))^ 
+            }
+        }
+    }
+}
 
 eval :: proc {
     eval_statement,
@@ -57,7 +76,7 @@ eval_expression :: proc(node: ast.Expression, env: ^object.Environment) -> ^obje
         case ast.IfExpression:
             obj^ = eval_if_expression(n, env)
         case ast.ERROR:
-            obj^ = object.ErrorValue{message = n.message}
+            obj^ = object.ErrorValue{message = n.message^}
         case ast.Identifier:
             obj^ = eval_identifier(n, env)
         case ast.FunctionLiteral:
@@ -75,6 +94,10 @@ eval_expression :: proc(node: ast.Expression, env: ^object.Environment) -> ^obje
             }
 
             obj^ = apply_function(function^, args)
+        case ast.StringLiteral:
+            str := new(object.StringValue)
+            str.value = strings.clone(n.value)
+            obj^ = str^
             
     }
 
@@ -82,6 +105,7 @@ eval_expression :: proc(node: ast.Expression, env: ^object.Environment) -> ^obje
 }
 
 eval_statement :: proc(node: ast.Statement, env: ^object.Environment) -> ^object.Object {
+    
     #partial switch n in node {
         case ast.Program:
             return eval_program(n, env)
@@ -99,12 +123,9 @@ eval_statement :: proc(node: ast.Statement, env: ^object.Environment) -> ^object
 
             val := eval(n.expression, env)
             if is_error(val){return val}
-            // ls := new(object.Object)
-            // ls^ = val^
-            // env.store[n.name.value] = ls^
             name := strings.clone(n.name.value)
             env.store[name] = val^
-            fmt.printf("%v", env.store)
+            fmt.printfln("%v", env.store)
     }
 
     obj := new(object.Object)
@@ -150,6 +171,8 @@ eval_infix_expression :: proc(operator: string, left: ^object.Object, right: ^ob
 
     if left_ok && right_ok {
         return eval_int_infix_expression(operator, left_val, right_val)
+    }else if object.get_type(left^) == "string" && object.get_type(left^) == object.get_type(right^) {
+        return eval_string_infix_expression(operator, left, right)
     } else if object.get_type(left^) != object.get_type(right^) {
         return new_error("type mismatch: %v %v %v",
             object.get_type(left^), operator, object.get_type(right^))^
@@ -182,6 +205,17 @@ eval_int_infix_expression :: proc(op: string, left: int, right: int) -> object.O
     }
 }
 
+eval_string_infix_expression :: proc(op: string, left: ^object.Object, right: ^object.Object) -> object.Object {
+    if op != "+" {
+        return new_error("unknown operator: %v %v %v", object.get_type(left^), op, object.get_type(right^))^
+    }
+
+    leftVal := left.(object.StringValue).value
+    rightVal := right.(object.StringValue).value
+
+    return object.StringValue{value = strings.concatenate({leftVal, rightVal})}
+}
+
 eval_prefix_expression :: proc(operator: string, right: ^object.Object) -> object.Object {
     switch operator {
         case "!":
@@ -207,7 +241,7 @@ eval_bang_operator_expression :: proc(right: ^object.Object) -> object.Object {
 }
 
 eval_minus_operator_expression :: proc(right: ^object.Object) -> object.Object {
-    switch &r in right {
+    #partial switch &r in right {
         case int:
             r = -r
             return right^
@@ -235,23 +269,30 @@ eval_if_expression :: proc(ie: ast.IfExpression, env: ^object.Environment) -> ob
 }
 
 eval_identifier :: proc (ident: ast.Identifier, env: ^object.Environment) -> object.Object {
-    val, ok := object.get_from_env(env, ident.value)
-    if !ok {
-        return new_error("identifier not found: %v", ident.value)^
+    if val, ok := object.get_from_env(env, ident.value); ok {
+        return val
     }
 
-    return val
+    if builtin, ok := builtins[ident.value]; ok {
+        return builtin
+    }
+
+    return new_error("identifier not found: %v", ident.value)^
 }
 
 apply_function :: proc(fn: object.Object, args: []object.Object) -> object.Object {
-    function, ok := fn.(object.Function)
-    if !ok {
-        return new_error("not a function: %v", typeid_of(type_of(fn)))^
+    
+    if function, ok := fn.(object.Function); ok {
+        extended_env := extend_function_env(function, args)
+        evaluated := eval(function.body^, extended_env)
+        return unwrap_return_value(evaluated^)
     }
 
-    extended_env := extend_function_env(function, args)
-    evaluated := eval(function.body^, extended_env)
-    return unwrap_return_value(evaluated^)
+    if builtin, ok := fn.(object.Builtin); ok {
+        return builtin.fn(..args)
+    }
+
+    return new_error("not a function: %v", typeid_of(type_of(fn)))^
 }
 
 extend_function_env :: proc(fn: object.Function, args: []object.Object) -> ^object.Environment {

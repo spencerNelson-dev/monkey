@@ -85,6 +85,9 @@ next_token :: proc(l: ^Lexer) -> token.Token {
             tok = new_token(.LBRACE, l.ch)
         case '}':
             tok = new_token(.RBRACE, l.ch)
+        case '"':
+            tok = new_token(.STRING, l.ch)
+            tok.literal = read_string(l)
         case 0:
             tok.literal = ""
             tok.type = .EOF
@@ -142,6 +145,17 @@ read_number :: proc(l: ^Lexer) -> string {
         read_char(l)
     }
     return l.input[position : l.position]
+}
+
+read_string :: proc(l: ^Lexer) -> string {
+    position := l.position + 1
+    for {
+        read_char(l)
+        if l.ch == '"' || l.ch == 0 {
+            break
+        }
+    }
+    return l.input[position:l.position]
 }
 
 is_letter :: proc(ch: byte) -> bool {

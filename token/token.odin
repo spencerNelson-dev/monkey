@@ -8,6 +8,7 @@ TokenType :: enum {
     
     IDENT,
     INT,
+    STRING,
     
     ASSIGN,
     PLUS,

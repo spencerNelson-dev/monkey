@@ -73,7 +73,10 @@ start :: proc(input: os.Handle, out: os.Handle){
                     fmt.fprintf(out, "\t%v\n", ast.print_statement(e))
                 }
                 fmt.fprint(out, "}\n")
-                
+            case object.StringValue:                
+                fmt.fprintf(out, "\"%v\"\n", e.value)     
+            case object.Builtin:
+                fmt.fprintf(out, "Builtin function\n")           
                 
         }
         

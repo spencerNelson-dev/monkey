@@ -44,6 +44,7 @@ Expression :: union {
     Identifier,
     IntegerLiteral,
     BoolLiteral,
+    StringLiteral,
     PrefixExpression,
     InfixExpression,
     IfExpression,
@@ -65,6 +66,11 @@ IntegerLiteral :: struct {
 BoolLiteral :: struct {
     token: token.Token,
     value: bool,
+}
+
+StringLiteral :: struct {
+    token: token.Token,
+    value: string,
 }
 
 PrefixExpression :: struct {
@@ -100,7 +106,7 @@ CallExpression :: struct {
 }
 
 ERROR :: struct {
-    message: string
+    message: ^string
 }
 
 print_program :: proc (p: ^Program){
@@ -159,6 +165,8 @@ print_expression :: proc(expression: Expression) -> string {
         case IntegerLiteral:
             return fmt.tprintf("%v", e.value)
         case BoolLiteral:
+            return fmt.tprint(e.value)
+        case StringLiteral:
             return fmt.tprint(e.value)
         case PrefixExpression:
             return fmt.tprintf("%v%v", e.operator, print_expression(e.right^))

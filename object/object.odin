@@ -11,6 +11,8 @@ Object :: union {
     ReturnValue,
     ErrorValue,
     Function,
+    StringValue,
+    Builtin,
 }
 
 ReturnValue :: struct {
@@ -27,6 +29,15 @@ Function :: struct {
     environment: ^Environment,
 }
 
+StringValue :: struct {
+    value: string
+}
+
+Builtin :: struct {
+    fn: BuiltinFunction
+}
+
+BuiltinFunction :: proc(args: ..Object) -> Object
 
 inspect :: proc(object: Object) -> string {
     #partial switch o in object {
@@ -42,6 +53,8 @@ inspect :: proc(object: Object) -> string {
             return fmt.aprintf("ERROR: %v", o.message)
         case Function:
             return fmt.aprintf("fn(){}")
+        case StringValue:
+            return o.value
     }
 
     return ""
@@ -61,6 +74,10 @@ get_type :: proc(object: Object) -> string {
             return "error"
         case Function:
             return "functon"
+        case StringValue:
+            return "string"
+        case Builtin:
+            return "builtin"
     }
 
     return ""
